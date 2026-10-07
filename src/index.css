@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 font-sans antialiased min-h-screen;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+}
+
+/* Accessible Focus Ring */
+*:focus-visible {
+  @apply outline-none ring-2 ring-teal-500 ring-offset-2 ring-offset-white;
+}
+
+/* High Contrast Mode Utility Class */
+.high-contrast {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity));
+  color: #000000 !important;
+}
+.high-contrast .card-bg {
+  border: 2px solid #000000 !important;
+  background: #ffffff !important;
+}
+
+/* Range Input Slider Custom Styling for HCI Direct Manipulation */
+input[type=range] {
+  @apply accent-teal-600 cursor-pointer h-2 bg-slate-200 rounded-lg appearance-none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  @apply w-5 h-5 bg-teal-600 rounded-full shadow-md hover:scale-110 active:scale-95 transition-transform appearance-none border-2 border-white;
+}
+
+/* Subtle Toast Animations */
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-toast {
+  animation: slideUpFade 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
