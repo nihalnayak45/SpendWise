@@ -1,5 +1,31 @@
 import type { CategoryName } from '../types/budget';
 
+export const CATEGORY_BUDGET_CONFIG: Record<
+  CategoryName,
+  { ratio: number; floor: number; badge: string; type: 'need' | 'discretionary' | 'savings' }
+> = {
+  Education: { ratio: 0.80, floor: 5000, badge: 'High Priority (Need)', type: 'need' },
+  Savings: { ratio: 0.80, floor: 5000, badge: 'Wealth Building', type: 'savings' },
+  Food: { ratio: 0.60, floor: 4000, badge: 'Essential Need', type: 'need' },
+  Bills: { ratio: 0.60, floor: 4000, badge: 'Fixed Expense', type: 'need' },
+  Transport: { ratio: 0.40, floor: 2500, badge: 'Daily Commute', type: 'need' },
+  Shopping: { ratio: 0.25, floor: 2000, badge: 'Discretionary (Non-essential)', type: 'discretionary' },
+  Entertainment: { ratio: 0.20, floor: 1500, badge: 'Discretionary (Leisure)', type: 'discretionary' },
+};
+
+/**
+ * Dynamically computes a category's maximum allocatable budget based on total monthly budget.
+ * Essential categories (Education, Savings, Food, Bills) are given higher caps (up to 60-80%),
+ * while non-essential/discretionary categories (Shopping, Entertainment) have lower caps (20-25%).
+ */
+export const getCategoryMaxRange = (categoryName: CategoryName, monthlyBudget: number): number => {
+  const config = CATEGORY_BUDGET_CONFIG[categoryName];
+  if (!config) return Math.max(3000, Math.round(monthlyBudget * 0.4));
+  if (monthlyBudget <= 0) return config.floor;
+  const calculated = Math.round((monthlyBudget * config.ratio) / 100) * 100;
+  return Math.max(config.floor, calculated);
+};
+
 export const BASE_CATEGORIES: {
   name: CategoryName;
   iconName: string;
@@ -8,13 +34,13 @@ export const BASE_CATEGORIES: {
   color: string;
   defaultPlanned: number;
 }[] = [
-  { name: 'Food', iconName: 'Utensils', minRange: 1000, maxRange: 8000, color: '#0d9488', defaultPlanned: 4000 },
-  { name: 'Transport', iconName: 'Bus', minRange: 500, maxRange: 4000, color: '#3b82f6', defaultPlanned: 1500 },
-  { name: 'Shopping', iconName: 'ShoppingBag', minRange: 500, maxRange: 5000, color: '#f59e0b', defaultPlanned: 1500 },
-  { name: 'Entertainment', iconName: 'Film', minRange: 300, maxRange: 3000, color: '#8b5cf6', defaultPlanned: 1000 },
-  { name: 'Bills', iconName: 'Receipt', minRange: 1000, maxRange: 5000, color: '#64748b', defaultPlanned: 2000 },
-  { name: 'Education', iconName: 'GraduationCap', minRange: 500, maxRange: 4000, color: '#06b6d4', defaultPlanned: 1000 },
-  { name: 'Savings', iconName: 'PiggyBank', minRange: 1000, maxRange: 10000, color: '#10b981', defaultPlanned: 4000 },
+  { name: 'Food', iconName: 'Utensils', minRange: 0, maxRange: 4000, color: '#0d9488', defaultPlanned: 0 },
+  { name: 'Transport', iconName: 'Bus', minRange: 0, maxRange: 2500, color: '#3b82f6', defaultPlanned: 0 },
+  { name: 'Shopping', iconName: 'ShoppingBag', minRange: 0, maxRange: 2000, color: '#f59e0b', defaultPlanned: 0 },
+  { name: 'Entertainment', iconName: 'Film', minRange: 0, maxRange: 1500, color: '#8b5cf6', defaultPlanned: 0 },
+  { name: 'Bills', iconName: 'Receipt', minRange: 0, maxRange: 4000, color: '#64748b', defaultPlanned: 0 },
+  { name: 'Education', iconName: 'GraduationCap', minRange: 0, maxRange: 5000, color: '#06b6d4', defaultPlanned: 0 },
+  { name: 'Savings', iconName: 'PiggyBank', minRange: 0, maxRange: 5000, color: '#10b981', defaultPlanned: 0 },
 ];
 
 export const getFirstDayOfMonth = (d = new Date()): string => {

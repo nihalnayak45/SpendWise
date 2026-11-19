@@ -14,6 +14,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth, ensureProfileExists } from './AuthContext';
 import {
   BASE_CATEGORIES,
+  getCategoryMaxRange,
   getFirstDayOfMonth,
   normalizeToFirstDayOfMonth,
   formatExpenseDate,
@@ -112,7 +113,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       spent: 0,
       iconName: b.iconName,
       minRange: b.minRange,
-      maxRange: b.maxRange,
+      maxRange: getCategoryMaxRange(b.name, 0),
       color: b.color,
     }))
   );
@@ -162,7 +163,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           {
             user_id: user.id,
             month: normMonth,
-            total_budget: 15000,
+            total_budget: 0,
           },
           { onConflict: 'user_id,month' }
         )
@@ -183,13 +184,16 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Load all user financial data from Supabase for the selected month and all-time history
-  const loadUserData = useCallback(async () => {
+  const loadUserData = useCallback(async (isInitial: boolean = false) => {
     if (!user || !isSupabaseConfigured) {
       setIsLoadingData(false);
       return;
     }
 
-    setIsLoadingData(true);
+    // Only display full-page loading spinner on initial load when plan is not yet loaded
+    if (isInitial || !currentPlanId) {
+      setIsLoadingData(true);
+    }
 
     try {
       // 0. Ensure user profile exists in public.profiles to satisfy budget_plan_user_id_fkey
@@ -214,8 +218,8 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         planId = existingPlan.id;
         planTotalBudget = Number(existingPlan.total_budget || 0);
       } else {
-        // Create initial default plan for new user/month using safe conflict handling on (user_id, month)
-        const defaultTotal = 15000;
+        // Create initial default plan for new user/month (starting at 0 for manual setup)
+        const defaultTotal = 0;
         const { data: newPlan, error: createError } = await supabase
           .from('budget_plan')
           .upsert(
@@ -237,11 +241,11 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           planTotalBudget = defaultTotal;
           userPlansList = [...userPlansList.filter(p => p.id !== newPlan.id), { id: newPlan.id, month: newPlan.month }];
 
-          // Insert recommended default category allocations into budget_categories
+          // Insert zeroed initial category allocations into budget_categories for manual allocation
           const initialCategoryRows = BASE_CATEGORIES.map(c => ({
             budget_plan_id: newPlan.id,
             category: c.name,
-            allocated_amount: c.defaultPlanned,
+            allocated_amount: 0,
           }));
 
           const { error: catInsertError } = await supabase
@@ -252,14 +256,14 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             console.error('Error inserting initial budget categories:', catInsertError.message);
           }
 
-          // Insert default monthly savings plan
+          // Insert default monthly savings plan with 0 planned amount
           const { error: savingsPlanError } = await supabase
             .from('monthly_savings_plans')
             .upsert(
               {
                 user_id: user.id,
                 month: selectedMonth,
-                planned_amount: 4000,
+                planned_amount: 0,
               },
               { onConflict: 'user_id,month' }
             );
@@ -297,7 +301,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             spent: 0,
             iconName: b.iconName,
             minRange: b.minRange,
-            maxRange: b.maxRange,
+            maxRange: getCategoryMaxRange(b.name, planTotalBudget),
             color: b.color,
           }))
         );
@@ -399,11 +403,11 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } finally {
       setIsLoadingData(false);
     }
-  }, [user, selectedMonth]);
+  }, [user?.id, selectedMonth, currentPlanId]);
 
   useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
+    loadUserData(true);
+  }, [user?.id, selectedMonth]);
 
   // Dynamically compute spent per category from real expenses
   const computedCategoryAllocations = useMemo(() => {
@@ -444,47 +448,94 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let score = 100;
     const checklist: { text: string; status: 'ok' | 'warning' | 'error' }[] = [];
 
-    if (totalSpent > monthlyBudget) {
-      score -= 30;
-      checklist.push({ text: `Total spending exceeds budget by ₹${(totalSpent - monthlyBudget).toLocaleString('en-IN')}`, status: 'error' });
-    } else {
-      checklist.push({ text: 'Spending within monthly budget', status: 'ok' });
+    // 1. Direct Planning Feedback: Are planned category allocations exceeding monthly budget?
+    if (monthlyBudget > 0 && totalAllocated > monthlyBudget) {
+      const overAmount = totalAllocated - monthlyBudget;
+      const overRatio = overAmount / monthlyBudget;
+      // Dynamically scale penalty based on how far over budget the user is (from 20 up to 70 points)
+      const allocPenalty = Math.min(70, Math.round(20 + overRatio * 50));
+      score -= allocPenalty;
+      checklist.push({
+        text: `Planned allocations exceed budget by ₹${overAmount.toLocaleString('en-IN')} (${Math.round(overRatio * 100)}% over)`,
+        status: 'error',
+      });
+    } else if (monthlyBudget > 0 && totalAllocated > 0) {
+      checklist.push({ text: 'All allocations fit within monthly budget', status: 'ok' });
     }
 
-    if (currentSavings >= 3000) {
-      checklist.push({ text: 'Savings goal on track', status: 'ok' });
-    } else {
+    // 2. Real Spending Check: Are actual logged expenses exceeding total budget?
+    if (monthlyBudget > 0 && totalSpent > monthlyBudget) {
+      const overSpent = totalSpent - monthlyBudget;
+      const overSpentRatio = overSpent / monthlyBudget;
+      const spendPenalty = Math.min(60, Math.round(25 + overSpentRatio * 50));
+      score -= spendPenalty;
+      checklist.push({
+        text: `Total spending exceeds budget by ₹${overSpent.toLocaleString('en-IN')}`,
+        status: 'error',
+      });
+    } else if (monthlyBudget > 0 && totalSpent > monthlyBudget * 0.85) {
       score -= 15;
-      checklist.push({ text: 'Savings contribution below target', status: 'warning' });
+      checklist.push({
+        text: `Spent ${Math.round((totalSpent / monthlyBudget) * 100)}% of budget (approaching monthly limit)`,
+        status: 'warning',
+      });
+    } else if (totalSpent > 0) {
+      checklist.push({ text: 'Spending pace is within healthy limits', status: 'ok' });
     }
 
-    const foodCat = computedCategoryAllocations.find((c) => c.name === 'Food');
-    if (foodCat && foodCat.spent > foodCat.planned && foodCat.planned > 0) {
+    // 3. Savings Target Check (Recommended 15% of monthly budget)
+    const targetSavings = monthlyBudget > 0 ? Math.round(monthlyBudget * 0.15) : 3000;
+    if (currentSavings >= targetSavings && currentSavings > 0) {
+      checklist.push({ text: `Savings allocation on track (₹${currentSavings.toLocaleString('en-IN')})`, status: 'ok' });
+    } else if (currentSavings > 0) {
       score -= 10;
-      checklist.push({ text: 'Food spending higher than planned', status: 'warning' });
+      checklist.push({
+        text: `Savings allocation (₹${currentSavings.toLocaleString('en-IN')}) below recommended target (₹${targetSavings.toLocaleString('en-IN')})`,
+        status: 'warning',
+      });
+    } else if (monthlyBudget > 0 && totalAllocated > 0) {
+      score -= 20;
+      checklist.push({ text: 'No savings allocated for this month', status: 'warning' });
     }
 
-    const shoppingCat = computedCategoryAllocations.find((c) => c.name === 'Shopping');
-    if (shoppingCat && shoppingCat.spent > shoppingCat.planned && shoppingCat.planned > 0) {
-      score -= 8;
-      checklist.push({ text: 'Shopping allocation exceeded', status: 'warning' });
-    }
+    // 4. Over-spending in individual categories
+    const overCategories = computedCategoryAllocations.filter(
+      (c) => c.name !== 'Savings' && c.spent > c.planned && c.planned > 0
+    );
+    overCategories.forEach((c) => {
+      const catOver = c.spent - c.planned;
+      score -= Math.min(15, Math.round(5 + (catOver / c.planned) * 10));
+      checklist.push({
+        text: `${c.name} spending exceeds planned by ₹${catOver.toLocaleString('en-IN')}`,
+        status: 'warning',
+      });
+    });
 
-    if (totalAllocated > monthlyBudget) {
-      score -= 15;
-      checklist.push({ text: `Planned allocations exceed budget by ₹${(totalAllocated - monthlyBudget).toLocaleString('en-IN')}`, status: 'error' });
+    // 5. Heavy non-essential allocation check (Shopping/Entertainment > 35% of budget)
+    if (monthlyBudget > 0) {
+      const shoppingCat = categoryAllocations.find((c) => c.name === 'Shopping');
+      if (shoppingCat && shoppingCat.planned > monthlyBudget * 0.35) {
+        score -= 10;
+        checklist.push({ text: 'Shopping allocation is higher than recommended (>35% of budget)', status: 'warning' });
+      }
     }
 
     return {
-      budgetHealthScore: Math.max(20, Math.min(100, score)),
+      budgetHealthScore: Math.max(10, Math.min(100, Math.round(score))),
       budgetHealthChecklist: checklist,
     };
-  }, [totalSpent, monthlyBudget, currentSavings, computedCategoryAllocations, totalAllocated, expenses.length]);
+  }, [totalSpent, monthlyBudget, currentSavings, computedCategoryAllocations, totalAllocated, expenses.length, categoryAllocations]);
 
   // Real Database Mutation: setMonthlyBudget
   const setMonthlyBudget = async (amount: number) => {
     const validAmount = Math.max(0, amount);
     setMonthlyBudgetState(validAmount);
+    setCategoryAllocations((prev) =>
+      prev.map((cat) => ({
+        ...cat,
+        maxRange: getCategoryMaxRange(cat.name, validAmount),
+      }))
+    );
     if (!user || !currentPlanId || !isSupabaseConfigured) return;
 
     try {
@@ -715,7 +766,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       spent: 0,
       iconName: b.iconName,
       minRange: b.minRange,
-      maxRange: b.maxRange,
+      maxRange: getCategoryMaxRange(b.name, monthlyBudget),
       color: b.color,
     }));
     setCategoryAllocations(defaultAllocations);
@@ -743,7 +794,7 @@ export const BudgetProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
 
-    addToast('info', 'Budget Reset', 'Allocations restored to recommended default.');
+    addToast('info', 'Budget Reset', 'Allocations have been reset to ₹0.');
   };
 
   const saveBudgetAllocations = async () => {

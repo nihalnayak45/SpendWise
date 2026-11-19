@@ -45,7 +45,7 @@ export const SavingsGoals: React.FC = () => {
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-md shadow-teal-600/20 transition-all active:scale-95"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Add New Goal</span>
+          <span>Add New Goal</span>
         </button>
       </div>
 

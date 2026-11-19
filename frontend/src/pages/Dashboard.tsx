@@ -46,7 +46,7 @@ export const Dashboard: React.FC = () => {
   const [timeframe, setTimeframe] = useState<'Daily' | 'Weekly' | 'Monthly'>('Weekly');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const spentPercentage = Math.min(100, Math.round((totalSpent / monthlyBudget) * 100));
+  const spentPercentage = monthlyBudget > 0 ? Math.min(100, Math.round((totalSpent / monthlyBudget) * 100)) : 0;
 
   const chartData = [
     { name: 'Food', amount: categoryAllocations.find((c: CategoryAllocation) => c.name === 'Food')?.spent || 0, color: '#0d9488' },
@@ -90,6 +90,28 @@ export const Dashboard: React.FC = () => {
         </button>
       </div>
 
+      {/* NEW USER ONBOARDING BANNER IF BUDGET IS ZERO */}
+      {monthlyBudget === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold">Welcome! Set up your budget to get started</h4>
+              <p className="text-xs text-amber-700">You haven't set a monthly budget yet. Enter your budget to allocate funds across categories.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setCurrentPage('planner')}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors shadow-sm flex items-center gap-1.5 flex-shrink-0"
+          >
+            <span>Set Budget</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* TOP SUMMARY KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Monthly Budget */}
@@ -104,8 +126,10 @@ export const Dashboard: React.FC = () => {
             <span className="text-2xl font-extrabold text-slate-900">₹{monthlyBudget.toLocaleString('en-IN')}</span>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500 font-medium border-t border-slate-100 pt-2">
-            <span>Student Baseline</span>
-            <span className="text-teal-600 font-semibold">Active</span>
+            <span>{monthlyBudget > 0 ? 'Monthly Plan' : 'Not set'}</span>
+            <span className={monthlyBudget > 0 ? "text-teal-600 font-semibold" : "text-amber-600 font-semibold"}>
+              {monthlyBudget > 0 ? 'Active' : 'Setup needed'}
+            </span>
           </div>
         </div>
 
@@ -303,7 +327,7 @@ export const Dashboard: React.FC = () => {
 
           <div className="space-y-4">
             {categoryAllocations.slice(0, 4).map((cat: CategoryAllocation) => {
-              const catPercent = Math.min(100, Math.round((cat.spent / cat.planned) * 100));
+              const catPercent = cat.planned > 0 ? Math.min(100, Math.round((cat.spent / cat.planned) * 100)) : 0;
               const isOver = cat.spent > cat.planned;
               return (
                 <div key={cat.name} className="space-y-1.5">
@@ -426,7 +450,7 @@ export const Dashboard: React.FC = () => {
             className="w-full mt-4 py-2.5 px-4 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-semibold text-xs border border-teal-200/60 transition-colors flex items-center justify-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add Expense</span>
+            <span>Add Expense</span>
           </button>
         </div>
       </div>

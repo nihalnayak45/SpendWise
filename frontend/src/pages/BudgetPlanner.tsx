@@ -3,6 +3,7 @@ import { useBudget } from '../context/BudgetContext';
 import { IconMapper } from '../components/common/IconMapper';
 import { CircularProgress } from '../components/common/CircularProgress';
 import type { CategoryAllocation } from '../types/budget';
+import { CATEGORY_BUDGET_CONFIG } from '../lib/budgetUtils';
 import { Sliders, AlertTriangle, CheckCircle, RotateCcw, Save, ShieldAlert } from 'lucide-react';
 
 export const BudgetPlanner: React.FC = () => {
@@ -42,8 +43,9 @@ export const BudgetPlanner: React.FC = () => {
               <span>₹</span>
               <input
                 type="number"
-                value={monthlyBudget}
-                onChange={(e) => setMonthlyBudget(Math.max(1000, parseInt(e.target.value) || 0))}
+                value={monthlyBudget === 0 ? '' : monthlyBudget}
+                placeholder="0"
+                onChange={(e) => setMonthlyBudget(Math.max(0, parseInt(e.target.value) || 0))}
                 className="w-24 bg-transparent font-extrabold text-slate-900 focus:outline-none border-b border-dashed border-slate-400 focus:border-teal-600 text-right"
               />
             </div>
@@ -52,7 +54,14 @@ export const BudgetPlanner: React.FC = () => {
       </div>
 
       {/* OVER-BUDGET ALERT BANNER (ERROR PREVENTION) */}
-      {isOverBudget ? (
+      {monthlyBudget === 0 ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-center gap-3 text-amber-900">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <p className="text-xs font-semibold">
+            Enter your monthly budget above, then distribute it across categories using the sliders below.
+          </p>
+        </div>
+      ) : isOverBudget ? (
         <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 flex items-center gap-4 text-rose-900 animate-toast">
           <ShieldAlert className="w-8 h-8 text-rose-600 flex-shrink-0" />
           <div className="flex-1">
@@ -82,50 +91,71 @@ export const BudgetPlanner: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            {categoryAllocations.map((cat: CategoryAllocation) => (
-              <div key={cat.name} className="space-y-2 p-3.5 rounded-xl hover:bg-slate-50/70 transition-colors border border-transparent hover:border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: cat.color }}>
-                      <IconMapper name={cat.iconName} className="w-4 h-4" />
+            {categoryAllocations.map((cat: CategoryAllocation) => {
+              const config = CATEGORY_BUDGET_CONFIG[cat.name];
+              return (
+                <div key={cat.name} className="space-y-2 p-3.5 rounded-xl hover:bg-slate-50/70 transition-colors border border-transparent hover:border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ backgroundColor: cat.color }}>
+                        <IconMapper name={cat.iconName} className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-slate-900">{cat.name}</h4>
+                          {config && (
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                config.type === 'need'
+                                  ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                                  : config.type === 'savings'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              }`}
+                            >
+                              {config.badge}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400">
+                          Spent: ₹{cat.spent.toLocaleString('en-IN')}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900">{cat.name}</h4>
-                      <span className="text-[11px] text-slate-400">
-                        Spent: ₹{cat.spent.toLocaleString('en-IN')}
+
+                    <div className="text-right">
+                      <span className="text-base font-extrabold text-slate-900">
+                        ₹{cat.planned.toLocaleString('en-IN')}
+                      </span>
+                      <span className="block text-[10px] text-slate-400 font-medium">
+                        {monthlyBudget > 0 ? Math.round((cat.planned / monthlyBudget) * 100) : 0}% of budget
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-base font-extrabold text-slate-900">
-                      ₹{cat.planned.toLocaleString('en-IN')}
-                    </span>
-                    <span className="block text-[10px] text-slate-400 font-medium">
-                      {Math.round((cat.planned / monthlyBudget) * 100)}% of budget
-                    </span>
+                  {/* Range Slider for Direct Manipulation */}
+                  <div className="pt-1">
+                    <input
+                      type="range"
+                      min={cat.minRange}
+                      max={cat.maxRange}
+                      step={100}
+                      value={cat.planned}
+                      onChange={(e) => updateCategoryPlanned(cat.name, parseInt(e.target.value))}
+                      className="w-full"
+                      aria-label={`Allocate budget for ${cat.name}`}
+                    />
+                    <div className="flex justify-between text-[11px] font-medium text-slate-400 mt-1">
+                      <span>Min ₹{cat.minRange.toLocaleString('en-IN')}</span>
+                      <span className="text-slate-600 font-semibold">
+                        Max Allowed: ₹{cat.maxRange.toLocaleString('en-IN')}{' '}
+                        {config ? `(Cap ${Math.round(config.ratio * 100)}%)` : ''}
+                      </span>
+                    </div>
                   </div>
                 </div>
-
-                {/* Range Slider for Direct Manipulation */}
-                <div className="pt-1">
-                  <input
-                    type="range"
-                    min={cat.minRange}
-                    max={cat.maxRange}
-                    step={100}
-                    value={cat.planned}
-                    onChange={(e) => updateCategoryPlanned(cat.name, parseInt(e.target.value))}
-                    className="w-full"
-                    aria-label={`Allocate budget for ${cat.name}`}
-                  />
-                  <div className="flex justify-between text-[11px] font-medium text-slate-400 mt-1">
-                    <span>Min ₹{cat.minRange.toLocaleString('en-IN')}</span>
-                    <span>Max ₹{cat.maxRange.toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

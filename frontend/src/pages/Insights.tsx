@@ -27,7 +27,7 @@ export const Insights: React.FC = () => {
   } = useBudget();
   const { profile, user, session } = useAuth();
 
-  const displayName = profile?.full_name || user?.user_metadata?.full_name || 'Nihal';
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'there';
 
   const [activeInsight, setActiveInsight] = useState<Insight | null>(null);
   const [chatQuery, setChatQuery] = useState('');

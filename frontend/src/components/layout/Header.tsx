@@ -44,7 +44,7 @@ export const Header: React.FC = () => {
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-all shadow-md shadow-teal-600/20 active:scale-95"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Add Expense</span>
+          <span>Add Expense</span>
         </button>
 
         <button

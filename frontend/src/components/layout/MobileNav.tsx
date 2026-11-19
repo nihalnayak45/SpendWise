@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBudget } from '../../context/BudgetContext';
+import { useAuth } from '../../context/AuthContext';
 import type { PageId } from '../../types/budget';
 import {
   LayoutDashboard,
@@ -13,10 +14,14 @@ import {
   Wallet,
   Settings,
   ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 
 export const MobileNav: React.FC = () => {
-  const { currentPage, setCurrentPage } = useBudget();
+  const { currentPage, setCurrentPage, monthlyBudget } = useBudget();
+  const { profile, user, signOut } = useAuth();
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const avatarLetter = (displayName.charAt(0) || 'U').toUpperCase();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const mainTabs: { id: PageId; label: string; icon: React.ReactNode }[] = [
@@ -78,17 +83,27 @@ export const MobileNav: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50 border border-slate-800 mt-4">
-              <div className="w-10 h-10 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold">
-                N
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-bold text-white">Nihal</h4>
-                <div className="flex items-center gap-1 text-xs text-slate-400">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Student Plan (₹15,000 / mo)</span>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50 border border-slate-800 mt-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold flex-shrink-0">
+                  {avatarLetter}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-white truncate">{displayName}</h4>
+                  <div className="flex items-center gap-1 text-xs text-slate-400">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                    <span className="truncate">{monthlyBudget > 0 ? `Budget: ₹${monthlyBudget.toLocaleString('en-IN')}` : 'No Budget Set'}</span>
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => signOut()}
+                className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0 ml-2"
+                title="Sign Out"
+                aria-label="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

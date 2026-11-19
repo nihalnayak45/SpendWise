@@ -99,10 +99,12 @@ CRITICAL RULES:
     const genAI = new GoogleGenerativeAI(geminiApiKey!);
     const candidateModels = [
       process.env.GEMINI_MODEL,
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
       'gemini-3.8-flash',
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
+      'gemini-3.7-flash',
+      'gemini-3.5-flash',
     ].filter(Boolean) as string[];
 
     const prompt = `
@@ -158,15 +160,17 @@ ${userQuery}
       } catch (err: unknown) {
         lastError = err instanceof Error ? err : new Error(String(err));
         console.warn(`Gemini model ${modelName} call failed:`, lastError.message);
-        // If model not found or unavailable, try next candidate model
+        // If model not found, deprecated, or experiencing temporary 503 high demand, try next model
         if (
           lastError.message.includes('404') ||
           lastError.message.includes('not found') ||
-          lastError.message.includes('no longer available')
+          lastError.message.includes('no longer available') ||
+          lastError.message.includes('503') ||
+          lastError.message.includes('high demand')
         ) {
           continue;
         }
-        // Non-404 error (e.g. rate limit / network)
+        // Other non-retriable error
         break;
       }
     }
